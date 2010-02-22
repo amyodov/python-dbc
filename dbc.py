@@ -1,4 +1,14 @@
 #!/usr/bin/python
+"""
+Design by Contract in Python.
+
+@description: This project enables to use the basics of Design by Contract capabilities in Python,
+              such as enforcing the contracts defined in the epydoc documentation.
+
+@copyright: Alex Myodov <amyodov@gmail.com>
+
+@url: http://code.google.com/p/python-dbc/
+"""
 
 from itertools import izip, chain
 import inspect
@@ -12,7 +22,7 @@ def typed(var, types):
 
     @param types: A tuple of types to check.
     @type types: tuple
-    
+
     @returns: The var argument.
     """
     assert isinstance(var, types), \
@@ -37,12 +47,12 @@ def ntyped(var, types):
     Traceback (most recent call last):
        ...
     AssertionError: Variable 5 of type <type 'int'> not among the allowed types: NoneType, <type 'str'>
-                                          
+
     """
     assert var is None or isinstance(var, types), \
         "Variable %s of type %s not among the allowed types: NoneType, %s" % (var, type(var), repr(types))
     return var
-                        
+
 
 def epydoc_contract(f):
     """
@@ -75,65 +85,73 @@ def epydoc_contract(f):
                               "you must have the epydoc module (often called python-epydoc) installed.\n"
                               "For more details about epydoc installation, see http://epydoc.sourceforge.net/")
 
-        
+
+        contract = docbuilder.build_doc(f)
+
+        arguments_to_validate = list(contract.arg_types)
+
+        if isinstance(contract, (apidoc.StaticMethodDoc, apidoc.ClassMethodDoc)):
+            raise NotImplementedError("Unfortunately, the @epydoc_contract decorator is not yet supported "
+                                      "for either staticmethod or classmethod functions.")
+        elif isinstance(contract, apidoc.RoutineDoc):
+            dm = contract.defining_module
+            f_location = "%s module (%s), %s()" % (contract.defining_module.canonical_name,
+                                                   contract.defining_module.filename,
+                                                   f.__name__)
+        else:
+            raise Exception("@epydoc_contract decorator is not yet supported for %s types!" % type(contract))
+
+
+        ds_linker = markup.DocstringLinker()
+
+
+        #
+        # Inline functions
+        #
+
+
+        def parse_str_to_value(value_str, entity_name, _globals = None, _locals = None):
+            if _globals is None:
+                _globals = globals()
+            if _locals is None:
+                _locals = locals()
+
+            try:
+                expected_value = eval(value_str, _globals, _locals)
+            except Exception, e:
+                raise SyntaxError("%s: "
+                                  "the following %s "
+                                  "could not be parsed: %s\n" % (f_location,
+                                                                 entity_name,
+                                                                 value_str))
+            return expected_value
+
+        # ---
+
+        def parse_str_to_type(type_str, entity_name, _globals = None, _locals = None):
+            expected_type = parse_str_to_value(type_str,
+                                               "type definition for %s" % entity_name,
+                                               _globals,
+                                               _locals)
+
+            if not isinstance(expected_type, (type, tuple)):
+                raise SyntaxError("%s: "
+                                  "the following type definition for %s "
+                                  "should define a type rather than a %s entity: "
+                                  "%s" % (f_location,
+                                          entity_name,
+                                          type(expected_type),
+                                          type_str))
+
+            return expected_type
+
+        # ---
+
         def wrapped_f(*args, **kwargs):
 
-            contract = docbuilder.build_doc(f)
-
-            if isinstance(contract, (apidoc.StaticMethodDoc, apidoc.ClassMethodDoc)):
-                raise NotImplementedError("Unfortunately, the @epydoc_contract decorator is not yet supported "
-                                          "for either staticmethod or classmethod functions.")
-            elif isinstance(contract, apidoc.RoutineDoc):
-                dm = contract.defining_module
-                f_location = "%s module (%s), %s()" % (contract.defining_module.canonical_name,
-                                                       contract.defining_module.filename,
-                                                       f.__name__)
-            else:
-                raise Exception("@epydoc_contract decorator is not yet supported for %s types!" % type(contract))
-
-
-            def parse_str_to_value(value_str, entity_name, _globals = None, _locals = None):
-                if _globals is None:
-                    _globals = globals()
-                if _locals is None:
-                    _locals = locals()
-
-                try:
-                    expected_value = eval(value_str, _globals, _locals)
-                except Exception, e:
-                    raise SyntaxError("%s: "
-                                      "the following %s "
-                                      "could not be parsed: %s\n" % (f_location,
-                                                                     entity_name,
-                                                                     value_str))
-                return expected_value
-
-
-            def parse_str_to_type(type_str, entity_name, _globals = None, _locals = None):
-                expected_type = parse_str_to_value(type_str,
-                                                   "type definition for %s" % entity_name,
-                                                   _globals,
-                                                   _locals)
-
-                if not isinstance(expected_type, (type, tuple)):
-                    raise SyntaxError("%s: "
-                                      "the following type definition for %s "
-                                      "should define a type rather than a %s entity: "
-                                      "%s" % (f_location,
-                                              entity_name,
-                                              type(expected_type),
-                                              type_str))
-
-                return expected_type
-              
-
-            ds_linker = markup.DocstringLinker()
-                
             # All values
             values = dict(chain(izip(contract.posargs, args),
                                 kwargs.iteritems()))
-
-            arguments_to_validate = list(contract.arg_types)
 
             # Validate arguments
             for argument in arguments_to_validate:
@@ -149,7 +167,7 @@ def epydoc_contract(f):
                                                          type(value),
                                                          expected_type,
                                                          repr(value)))
-                
+
             # Validate preconditions
             locals_for_preconditions = dict(globals())
             locals_for_preconditions.update(values)
@@ -167,17 +185,18 @@ def epydoc_contract(f):
                                          "and its real value is %s" % (f_location,
                                                                        description_str.strip(),
                                                                        repr(value)))
-                        
+
+            #
             # Call the desired function
+            #
             result = f(*args, **kwargs)
 
             # Validate return value
             if contract.return_type is not None:
-                #rtype = type(result)
 
                 expected_type = parse_str_to_type(contract.return_type.to_plaintext(ds_linker),
                                                   "return value")
-                
+
                 if not isinstance(result, expected_type):
                     raise TypeError("%s: " \
                                     "The following return value is of %s while must be of %s: "
@@ -185,7 +204,7 @@ def epydoc_contract(f):
                                             type(result),
                                             expected_type,
                                             repr(result)))
-                
+
             # Validate postconditions
             locals_for_postconditions = dict(globals())
             locals_for_postconditions.update({"result": result})
@@ -206,6 +225,12 @@ def epydoc_contract(f):
 
             # Validations are successful
             return result
+
+
+        #
+        # Inline functions done
+        #
+
 
         # Fix the parameters of the function
         if isinstance(f, staticmethod):
