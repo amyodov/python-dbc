@@ -1,120 +1,306 @@
 #!/usr/bin/python
 
-from epydoc import apidoc, docstringparser, docbuilder, markup
+from itertools import izip, chain
+import inspect
 
+
+def typed(var, types):
+    """
+    Ensure that the "var" argument is among the types passed as the "types" argument.
+
+    @param var: The argument to be typed.
+
+    @param types: A tuple of types to check.
+    @type types: tuple
+    
+    @returns: The var argument.
+    """
+    assert isinstance(var, types), \
+        "Variable %s of type %s not among the allowed types: %s" % (var, type(var), repr(types))
+    return var
+
+
+def ntyped(var, types):
+    """
+    Ensure that the "var" argument is among the types passed as the "types" argument, or is None.
+
+    @param var: The argument to be typed.
+
+    @param types: A tuple of types to check.
+    @type types: tuple
+
+    @returns: The var argument.
+
+    >>> ntyped(5, int)
+    5
+    >>> ntyped(5, str)
+    Traceback (most recent call last):
+       ...
+    AssertionError: Variable 5 of type <type 'int'> not among the allowed types: NoneType, <type 'str'>
+                                          
+    """
+    assert var is None or isinstance(var, types), \
+        "Variable %s of type %s not among the allowed types: NoneType, %s" % (var, type(var), repr(types))
+    return var
+                        
 
 def epydoc_contract(f):
-    if __debug__:
-        def wrapped_f(*args, **kwargs):
-            #print "DOC", dir(f)
+    """
+    The decorator for any functions which have a epydoc-formatted docstring.
+    It validates the function inputs and output against the contract defined by the epydoc description.
 
-            ds_linker = markup.DocstringLinker()
+    Currently, it supports the usual functions as well as simple object methods
+    (though neither classmethods nor staticmethods).
+
+    Inside the epydoc contracts, it supports the following fields:
+
+    - C{@type arg:} - the type of the C{arg} argument is validated before the function is called.
+
+    - C{@rtype:} - the return type of the function is validated after the function is called.
+
+    - C{@precondition:} - the precondition (that may involve the arguments of the function)
+        that should be satisfied before the function is executed.
+
+    - C{@postcondition:} - the postcondition (that may involve the result of the function given as C{result} variable)
+        that should be satisfied after the function is executed.
+
+    @param f: The function which epydoc documentation should be verified.
+    @precondition: callable(f)
+    """
+    if __debug__:
+        try:
+            from epydoc import apidoc, docbuilder, markup
+        except ImportError:
+            raise ImportError("To use epydoc_contract() function, "
+                              "you must have the epydoc module (often called python-epydoc) installed.\n"
+                              "For more details about epydoc installation, see http://epydoc.sourceforge.net/")
+
+        
+        def wrapped_f(*args, **kwargs):
 
             contract = docbuilder.build_doc(f)
+            print inspect.getmodule(f)
+            print inspect.getfile(f)
 
-            if isinstance(contract, apidoc.RoutineDoc):
+            if isinstance(contract, (apidoc.StaticMethodDoc, apidoc.ClassMethodDoc)):
+                raise NotImplementedError("Unfortunately, the @epydoc_contract decorator is not yet supported "
+                                          "for either staticmethod or classmethod functions.")
+            elif isinstance(contract, apidoc.RoutineDoc):
+                dm = contract.defining_module
                 f_location = "%s module (%s), %s()" % (contract.defining_module.canonical_name,
                                                        contract.defining_module.filename,
                                                        f.__name__)
+            else:
+                raise Exception("@epydoc_contract decorator is not yet supported for %s types!" % type(contract))
+
+
+            def parse_str_to_value(value_str, entity_name, _globals = None, _locals = None):
+                if _globals is None:
+                    _globals = globals()
+                if _locals is None:
+                    _locals = locals()
+
+                try:
+                    expected_value = eval(value_str, _globals, _locals)
+                except Exception, e:
+                    raise SyntaxError("%s: "
+                                      "the following %s "
+                                      "could not be parsed: %s\n" % (f_location,
+                                                                     entity_name,
+                                                                     value_str))
+                return expected_value
+
+
+            def parse_str_to_type(type_str, entity_name, _globals = None, _locals = None):
+                expected_type = parse_str_to_value(type_str,
+                                                   "type definition for %s" % entity_name,
+                                                   _globals,
+                                                   _locals)
+
+                if not isinstance(expected_type, (type, tuple)):
+                    raise SyntaxError("%s: "
+                                      "the following type definition for %s "
+                                      "should define a type rather than a %s entity: "
+                                      "%s" % (f_location,
+                                              entity_name,
+                                              type(expected_type),
+                                              type_str))
+
+                return expected_type
+              
+
+            ds_linker = markup.DocstringLinker()
                 
-            #print "RoutineDoc", dir(contract)
-            #for k in dir(contract):
-            #    print "  >>", k, getattr(contract, k)
+            # All values
+            values = dict(chain(izip(contract.posargs, args),
+                                kwargs.iteritems()))
 
+            arguments_to_validate = list(contract.arg_types)
 
-            # Validate positional arguments
-            posargs_values = dict(zip(contract.posargs, args))
-            #print `posargs_values`
+            # Validate arguments
+            for argument in arguments_to_validate:
+                value = values[argument]
+                expected_type = parse_str_to_type(contract.arg_types[argument].to_plaintext(ds_linker),
+                                                  "%s argument" % argument)
 
-            posarg_to_type = dict((name, eval(descr.to_plaintext(ds_linker)) ) for name, descr in contract.arg_types.iteritems())
-
-            #print `posarg_to_type`
-            for posarg in contract.posargs:
-                #print "POSARG", posarg
-                if posarg in posarg_to_type:
-                    value = posargs_values[posarg]
-                    expected_type = posarg_to_type[posarg]
-                    #print "Check", value, expected_type
-                    if not isinstance(value, expected_type):
-                        raise TypeError("%s: " \
-                                        "The %s argument is %s of %s while must be of %s." % (f_location,
-                                                                                              repr(posarg),
-                                                                                              `value`,
-                                                                                              type(value),
-                                                                                              expected_type))
-
-            result = f(*args)
+                if not isinstance(value, expected_type):
+                    raise TypeError("%s: "
+                                    "The %s argument is of %s while must be of %s; "
+                                    "its value is %s" % (f_location,
+                                                         argument,
+                                                         type(value),
+                                                         expected_type,
+                                                         repr(value)))
+                
+            # Validate preconditions
+            locals_for_preconditions = dict(globals())
+            locals_for_preconditions.update(values)
+            for field, argument, description in contract.metadata:
+                if field.singular == "Precondition":
+                    description_str = description.to_plaintext(ds_linker)
+                    value = parse_str_to_value(description_str,
+                                               "precondition definition",
+                                               _locals = locals_for_preconditions)
+                    if not value:
+                        raise ValueError("%s: "
+                                         "The following precondition results in logical False; "
+                                         "its definition is:\n"
+                                         "\t%s\n"
+                                         "and its real value is %s" % (f_location,
+                                                                       description_str.strip(),
+                                                                       repr(value)))
+                        
+            # Call the desired function
+            result = f(*args, **kwargs)
 
             # Validate return value
             if contract.return_type is not None:
-                rtype = type(result)
-                expected_type = eval(contract.return_type.to_plaintext(ds_linker))
-                #print "EXP", `expected_type`, `rtype`
+                #rtype = type(result)
+
+                expected_type = parse_str_to_type(contract.return_type.to_plaintext(ds_linker),
+                                                  "return value")
+                
                 if not isinstance(result, expected_type):
                     raise TypeError("%s: " \
-                                    "The return value is %s of %s while must be of %s." % (f_location,
-                                                                                           repr(result),
-                                                                                           type(result),
-                                                                                           expected_type))
+                                    "The following return value is of %s while must be of %s: "
+                                    "%s" % (f_location,
+                                            type(result),
+                                            expected_type,
+                                            repr(result)))
+                
+            # Validate postconditions
+            locals_for_postconditions = dict(globals())
+            locals_for_postconditions.update({"result": result})
+            for field, argument, description in contract.metadata:
+                if field.singular == "Postcondition":
+                    description_str = description.to_plaintext(ds_linker)
+                    value = parse_str_to_value(description_str,
+                                               "postcondition definition",
+                                               _locals = locals_for_postconditions)
+                    if not value:
+                        raise ValueError("%s: "
+                                         "The following postcondition results in logical False; "
+                                         "its definition is:\n"
+                                         "\t%s\n"
+                                         "and its real value is %s" % (f_location,
+                                                                       description_str.strip(),
+                                                                       repr(value)))
 
             # Validations are successful
             return result
+
+        # Fix the parameters of the function
+        if isinstance(f, staticmethod):
+            wrapped_f = staticmethod(wrapped_f)
+        elif isinstance(f, classmethod):
+            wrapped_f = classmethod(wrapped_f)
+        else:
+            wrapped_f.func_name = f.func_name
         return wrapped_f
     else:
         return f
 
-#def decoratorFunctionWithArguments(arg1, arg2, arg3):
-#    def wrap(f):
-#        print "Inside wrap()"
-#        def wrapped_f(*args):
-#            print "Inside wrapped_f()"
-#            print "Decorator arguments:", arg1, arg2, arg3
-#            f(*args)
-#            print "After f(*args)"
-#        return wrapped_f
-#    return wrap
-
 
 
 if __debug__:
-    def test():
+    def test_type():
         """
         >>> @epydoc_contract
-        ... def f1(a1):
+        ... def f(a1):
         ...     '''
         ...     @type a1: str
         ...     '''
         ...     return a1 + 1
-        >>> r = f1(1) # doctest:+ELLIPSIS
+        >>> r = f(1) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
         Traceback (most recent call last):
-           ...
-        TypeError: __main__ module (...), f1(): The 'a1' argument is 1 of <type 'int'> while must be of <type 'str'>.
+          ...
+        TypeError: __main__ module (...), f(): The a1 argument is of <type 'int'> while must be of <type 'str'>; its value is 1
+        """
 
+    def test_rtype():
+        """
         >>> @epydoc_contract
-        ... def f2(a1):
+        ... def f(a1):
         ...     '''
         ...     @rtype: int
         ...     '''
         ...     return a1
-        >>> r = f2("") # doctest:+ELLIPSIS
+        >>> r = f("a") # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
         Traceback (most recent call last):
-           ...
-        TypeError: __main__ module (...), f2(): The return value is '' of <type 'str'> while must be of <type 'int'>.
+          ...
+        TypeError: __main__ module (...), f(): The following return value is of <type 'str'> while must be of <type 'int'>:
+            'a'
         """
 
+    def test_precondition():
+        """
+        >>> @epydoc_contract
+        ... def f(a1, a2):
+        ...     '''
+        ...     @precondition: a1 > 0
+        ...     @precondition: a2 > 0
+        ...     @precondition: a1 + a2 > 0
+        ...     '''
+        ...     return a1 + a2
+        >>> r = f(5, 6) # Nothing wrong
+        >>> r = f(-5, 0) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
+        Traceback (most recent call last):
+          ...
+        ValueError: __main__ module (...), f(): The following precondition results in logical False; its definition is:
+            a1 > 0
+        and its real value is False
+        """
+
+    def test_postcondition():
+        """
+        >>> @epydoc_contract
+        ... def f(a1, a2):
+        ...     '''
+        ...     @postcondition: result > 0
+        ...     @postcondition: result % 2
+        ...     '''
+        ...     return a1 + a2
+
+        >>> r = f(3, 6) # Nothing wrong
+
+        >>> # Test explicit boolean expression
+        >>> r = f(-6, 3) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
+        Traceback (most recent call last):
+          ...
+        ValueError: __main__ module (...), f(): The following postcondition results in logical False; its definition is:
+            result > 0
+        and its real value is False
+
+        >>> # Test implicit boolean expression. 4 + 6 = 10, 10 % 2 = 0, bool(0) = False
+        >>> r = f(4, 6) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
+        Traceback (most recent call last):
+          ...
+        ValueError: __main__ module (...), f(): The following postcondition results in logical False; its definition is:
+            result % 2
+        and its real value is 0
+        """
 
 
 if __name__ == "__main__":
     import doctest
     doctest.testmod()
-
-
-@epydoc_contract
-def f1(a1):
-    """
-    @rtype: int
-    """
-    return a1
-
-
-r = f1(1)
