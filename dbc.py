@@ -79,8 +79,6 @@ def epydoc_contract(f):
         def wrapped_f(*args, **kwargs):
 
             contract = docbuilder.build_doc(f)
-            print inspect.getmodule(f)
-            print inspect.getfile(f)
 
             if isinstance(contract, (apidoc.StaticMethodDoc, apidoc.ClassMethodDoc)):
                 raise NotImplementedError("Unfortunately, the @epydoc_contract decorator is not yet supported "
