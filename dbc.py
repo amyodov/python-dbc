@@ -85,30 +85,21 @@ def epydoc_contract(f):
                               "you must have the epydoc module (often called python-epydoc) installed.\n"
                               "For more details about epydoc installation, see http://epydoc.sourceforge.net/")
 
+        module = inspect.getmodule(f)
+        base_function_list = [i[3] for i in inspect.stack()]
+        if "<module>" in base_function_list:
+            base_function_list = base_function_list[:base_function_list.index("<module>")]
+
+        base_function_path = list(reversed(base_function_list))[:-1]
+
+        if not hasattr(module, "_dbc_ds_linker"):
+            module._dbc_ds_linker = markup.DocstringLinker()
 
         contract = docbuilder.build_doc(f)
 
         arguments_to_validate = list(contract.arg_types)
 
-        if isinstance(contract, (apidoc.StaticMethodDoc, apidoc.ClassMethodDoc)):
-            raise NotImplementedError("Unfortunately, the @epydoc_contract decorator is not yet supported "
-                                      "for either staticmethod or classmethod functions.")
-        elif isinstance(contract, apidoc.RoutineDoc):
-            dm = contract.defining_module
-            f_location = "%s module (%s), %s()" % (contract.defining_module.canonical_name,
-                                                   contract.defining_module.filename,
-                                                   f.__name__)
-        else:
-            raise Exception("@epydoc_contract decorator is not yet supported for %s types!" % type(contract))
-
-
-        ds_linker = markup.DocstringLinker()
-
-
-        #
-        # Inline functions
-        #
-
+        # ---
 
         def parse_str_to_value(value_str, entity_name, _globals = None, _locals = None):
             if _globals is None:
@@ -147,7 +138,32 @@ def epydoc_contract(f):
 
         # ---
 
+        expected_types = dict((argument, parse_str_to_type(contract.arg_types[argument].to_plaintext(module._dbc_ds_linker),
+                                                           "%s argument" % argument))
+                                  for argument in arguments_to_validate)
+
+        preconditions = [description.to_plaintext(module._dbc_ds_linker)
+                             for field, argument, description in contract.metadata
+                             if field.singular == "Precondition"]
+        postconditions = [description.to_plaintext(module._dbc_ds_linker)
+                              for field, argument, description in contract.metadata
+                              if field.singular == "Postcondition"]
+
+        if isinstance(f, (staticmethod, classmethod)):
+            raise NotImplementedError("Unfortunately, the @epydoc_contract decorator is not supported "
+                                      "for either staticmethod or classmethod functions.")
+        elif isinstance(contract, apidoc.RoutineDoc):
+            dm = contract.defining_module
+            f_location = "%s module (%s), %s()" % (contract.defining_module.canonical_name,
+                                                   contract.defining_module.filename,
+                                                   ".".join(base_function_path + [f.__name__]))
+        else:
+            raise Exception("@epydoc_contract decorator is not yet supported for %s types!" % type(contract))
+
+        # ---
+
         def wrapped_f(*args, **kwargs):
+            _globals = globals()
 
             # All values
             values = dict(chain(izip(contract.posargs, args),
@@ -156,8 +172,7 @@ def epydoc_contract(f):
             # Validate arguments
             for argument in arguments_to_validate:
                 value = values[argument]
-                expected_type = parse_str_to_type(contract.arg_types[argument].to_plaintext(ds_linker),
-                                                  "%s argument" % argument)
+                expected_type = expected_types[argument]
 
                 if not isinstance(value, expected_type):
                     raise TypeError("%s: "
@@ -169,22 +184,20 @@ def epydoc_contract(f):
                                                          repr(value)))
 
             # Validate preconditions
-            locals_for_preconditions = dict(globals())
+            locals_for_preconditions = dict(_globals)
             locals_for_preconditions.update(values)
-            for field, argument, description in contract.metadata:
-                if field.singular == "Precondition":
-                    description_str = description.to_plaintext(ds_linker)
-                    value = parse_str_to_value(description_str,
-                                               "precondition definition",
-                                               _locals = locals_for_preconditions)
-                    if not value:
-                        raise ValueError("%s: "
-                                         "The following precondition results in logical False; "
-                                         "its definition is:\n"
-                                         "\t%s\n"
-                                         "and its real value is %s" % (f_location,
-                                                                       description_str.strip(),
-                                                                       repr(value)))
+            for description_str in preconditions:
+                value = parse_str_to_value(description_str,
+                                           "precondition definition",
+                                           _locals = locals_for_preconditions)
+                if not value:
+                    raise ValueError("%s: "
+                                     "The following precondition results in logical False; "
+                                     "its definition is:\n"
+                                     "\t%s\n"
+                                     "and its real value is %s" % (f_location,
+                                                                   description_str.strip(),
+                                                                   repr(value)))
 
             #
             # Call the desired function
@@ -194,7 +207,7 @@ def epydoc_contract(f):
             # Validate return value
             if contract.return_type is not None:
 
-                expected_type = parse_str_to_type(contract.return_type.to_plaintext(ds_linker),
+                expected_type = parse_str_to_type(contract.return_type.to_plaintext(module._dbc_ds_linker),
                                                   "return value")
 
                 if not isinstance(result, expected_type):
@@ -206,39 +219,28 @@ def epydoc_contract(f):
                                             repr(result)))
 
             # Validate postconditions
-            locals_for_postconditions = dict(globals())
+            locals_for_postconditions = dict(_globals)
             locals_for_postconditions.update({"result": result})
-            for field, argument, description in contract.metadata:
-                if field.singular == "Postcondition":
-                    description_str = description.to_plaintext(ds_linker)
-                    value = parse_str_to_value(description_str,
-                                               "postcondition definition",
-                                               _locals = locals_for_postconditions)
-                    if not value:
-                        raise ValueError("%s: "
-                                         "The following postcondition results in logical False; "
-                                         "its definition is:\n"
-                                         "\t%s\n"
-                                         "and its real value is %s" % (f_location,
-                                                                       description_str.strip(),
-                                                                       repr(value)))
+            for description_str in postconditions:
+                value = parse_str_to_value(description_str,
+                                           "postcondition definition",
+                                           _locals = locals_for_postconditions)
+                if not value:
+                    raise ValueError("%s: "
+                                     "The following postcondition results in logical False; "
+                                     "its definition is:\n"
+                                     "\t%s\n"
+                                     "and its real value is %s" % (f_location,
+                                                                   description_str.strip(),
+                                                                   repr(value)))
 
             # Validations are successful
             return result
 
-
-        #
-        # Inline functions done
-        #
-
+        # ---
 
         # Fix the parameters of the function
-        if isinstance(f, staticmethod):
-            wrapped_f = staticmethod(wrapped_f)
-        elif isinstance(f, classmethod):
-            wrapped_f = classmethod(wrapped_f)
-        else:
-            wrapped_f.func_name = f.func_name
+        wrapped_f.func_name = f.func_name
         return wrapped_f
     else:
         return f
@@ -246,6 +248,7 @@ def epydoc_contract(f):
 
 
 if __debug__:
+
     def test_type():
         """
         >>> @epydoc_contract
@@ -257,7 +260,8 @@ if __debug__:
         >>> r = f(1) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
         Traceback (most recent call last):
           ...
-        TypeError: __main__ module (...), f(): The a1 argument is of <type 'int'> while must be of <type 'str'>; its value is 1
+        TypeError: __main__ module (...), f(): The a1 argument is of <type 'int'> \
+                   while must be of <type 'str'>; its value is 1
         """
 
     def test_rtype():
@@ -271,7 +275,8 @@ if __debug__:
         >>> r = f("a") # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
         Traceback (most recent call last):
           ...
-        TypeError: __main__ module (...), f(): The following return value is of <type 'str'> while must be of <type 'int'>:
+        TypeError: __main__ module (...), f(): The following return value is of <type 'str'> \
+                   while must be of <type 'int'>:
             'a'
         """
 
@@ -289,7 +294,8 @@ if __debug__:
         >>> r = f(-5, 0) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
         Traceback (most recent call last):
           ...
-        ValueError: __main__ module (...), f(): The following precondition results in logical False; its definition is:
+        ValueError: __main__ module (...), f(): The following precondition results in logical False; \
+                    its definition is:
             a1 > 0
         and its real value is False
         """
@@ -310,7 +316,8 @@ if __debug__:
         >>> r = f(-6, 3) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
         Traceback (most recent call last):
           ...
-        ValueError: __main__ module (...), f(): The following postcondition results in logical False; its definition is:
+        ValueError: __main__ module (...), f(): The following postcondition results in logical False; \
+                    its definition is:
             result > 0
         and its real value is False
 
@@ -318,9 +325,31 @@ if __debug__:
         >>> r = f(4, 6) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
         Traceback (most recent call last):
           ...
-        ValueError: __main__ module (...), f(): The following postcondition results in logical False; its definition is:
+        ValueError: __main__ module (...), f(): The following postcondition results in logical False; \
+                    its definition is:
             result % 2
         and its real value is 0
+        """
+
+    def test_class():
+        """
+        >>> class A(object):
+        ...     class B(object):
+        ...         @staticmethod
+        ...         @epydoc_contract
+        ...         def f(a1):
+        ...             '''
+        ...             @type a1: str
+        ...             '''
+        ...             return a1
+
+        >>> r = A.B.f("")
+
+        >>> r = A.B.f(1) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
+        Traceback (most recent call last):
+          ...
+        TypeError: __main__ module (...), A.B.f(): The a1 argument is of <type 'int'> \
+                   while must be of <type 'str'>; its value is 1
         """
 
 
