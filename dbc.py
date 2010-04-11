@@ -24,6 +24,20 @@ def typed(var, types):
     @type types: tuple
 
     @returns: The var argument.
+
+    >>> a = typed("abc", str)
+    >>> type(a)
+    <type 'str'>
+
+    >>> b = typed("abc", int) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
+    Traceback (most recent call last):
+      ...
+    AssertionError: Variable abc of type <type 'str'> not among the allowed types: <type 'int'>
+
+    >>> c = typed(None, int) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
+    Traceback (most recent call last):
+      ...
+    AssertionError: Variable None of type <type 'NoneType'> not among the allowed types: <type 'int'>
     """
     assert isinstance(var, types), \
         "Variable %s of type %s not among the allowed types: %s" % (var, type(var), repr(types))
@@ -41,17 +55,42 @@ def ntyped(var, types):
 
     @returns: The var argument.
 
-    >>> ntyped(5, int)
-    5
-    >>> ntyped(5, str)
-    Traceback (most recent call last):
-       ...
-    AssertionError: Variable 5 of type <type 'int'> not among the allowed types: NoneType, <type 'str'>
+    >>> a = ntyped("abc", str)
+    >>> type(a)
+    <type 'str'>
 
+    >>> b = ntyped("abc", int) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
+    Traceback (most recent call last):
+      ...
+    AssertionError: Variable abc of type <type 'str'> not among the allowed types: NoneType, <type 'int'>
+
+    >>> c = ntyped(None, int) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
     """
     assert var is None or isinstance(var, types), \
         "Variable %s of type %s not among the allowed types: NoneType, %s" % (var, type(var), repr(types))
     return var
+
+
+def consists_of(seq, types):
+    """
+    Check that the all elements from the "seq" argument (sequence) are among the types passed as the "types" argument.
+
+    @param seq: The sequence which elements are to be typed.
+
+    @param types: A tuple of types to check.
+    @type types: tuple
+
+    @return: Whether the check succeeded.
+    @rtype: bool
+
+    >>> consists_of([5, 6, 7], int)
+    True
+    >>> consists_of([5, 6, 7, "abc"], int)
+    False
+    >>> consists_of([5, 6, 7, "abc"], (int, str))
+    True
+    """
+    return all(isinstance(element, types) for element in seq)
 
 
 def epydoc_contract(f):
