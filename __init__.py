@@ -136,6 +136,13 @@ def epydoc_contract(f):
 
         contract = docbuilder.build_doc(f)
 
+        preconditions = [description.to_plaintext(module._dbc_ds_linker)
+                             for field, argument, description in contract.metadata
+                             if field.singular == "Precondition"]
+        postconditions = [description.to_plaintext(module._dbc_ds_linker)
+                              for field, argument, description in contract.metadata
+                              if field.singular == "Postcondition"]
+
         if isinstance(f, (staticmethod, classmethod)):
             raise NotImplementedError("Unfortunately, the @epydoc_contract decorator is not supported "
                                       "for either staticmethod or classmethod functions.")
@@ -187,25 +194,18 @@ def epydoc_contract(f):
 
         # ---
 
-
-        arguments_to_validate = list(contract.arg_types)
-
-        expected_types = dict((argument, parse_str_to_type(contract.arg_types[argument].to_plaintext(module._dbc_ds_linker),
-                                                           "%s argument" % argument))
-                                  for argument in arguments_to_validate)
-
-        preconditions = [description.to_plaintext(module._dbc_ds_linker)
-                             for field, argument, description in contract.metadata
-                             if field.singular == "Precondition"]
-        postconditions = [description.to_plaintext(module._dbc_ds_linker)
-                              for field, argument, description in contract.metadata
-                              if field.singular == "Postcondition"]
-
-
-        # ---
-
         def wrapped_f(*args, **kwargs):
-            _globals = globals()
+            # For "globals" dictionary, we should use the globals of the code
+            # that called the wrapper function.
+            _globals = inspect.getargvalues(inspect.stack()[1][0])[3]
+
+            arguments_to_validate = list(contract.arg_types)
+
+            expected_types = dict((argument, parse_str_to_type(contract.arg_types[argument].to_plaintext(module._dbc_ds_linker),
+                                                               "%s argument" % argument,
+                                                               _globals = _globals))
+                                      for argument in arguments_to_validate)
+
 
             # All values
             values = dict(chain(izip(contract.posargs, args),
@@ -231,6 +231,7 @@ def epydoc_contract(f):
             for description_str in preconditions:
                 value = parse_str_to_value(description_str,
                                            "precondition definition",
+                                           _globals = _globals,
                                            _locals = locals_for_preconditions)
                 if not value:
                     raise ValueError("%s: "
@@ -250,7 +251,8 @@ def epydoc_contract(f):
             if contract.return_type is not None:
 
                 expected_type = parse_str_to_type(contract.return_type.to_plaintext(module._dbc_ds_linker),
-                                                  "return value")
+                                                  "return value",
+                                                  _globals = _globals)
 
                 if not isinstance(result, expected_type):
                     raise TypeError("%s: " \
