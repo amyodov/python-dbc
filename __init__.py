@@ -136,7 +136,17 @@ def epydoc_contract(f):
 
         contract = docbuilder.build_doc(f)
 
-        arguments_to_validate = list(contract.arg_types)
+        if isinstance(f, (staticmethod, classmethod)):
+            raise NotImplementedError("Unfortunately, the @epydoc_contract decorator is not supported "
+                                      "for either staticmethod or classmethod functions.")
+        elif isinstance(contract, apidoc.RoutineDoc):
+            dm = contract.defining_module
+            f_location = "%s module (%s), %s()" % (contract.defining_module.canonical_name,
+                                                   contract.defining_module.filename,
+                                                   ".".join(base_function_path + [f.__name__]))
+        else:
+            raise Exception("@epydoc_contract decorator is not yet supported for %s types!" % type(contract))
+
 
         # ---
 
@@ -177,6 +187,9 @@ def epydoc_contract(f):
 
         # ---
 
+
+        arguments_to_validate = list(contract.arg_types)
+
         expected_types = dict((argument, parse_str_to_type(contract.arg_types[argument].to_plaintext(module._dbc_ds_linker),
                                                            "%s argument" % argument))
                                   for argument in arguments_to_validate)
@@ -188,16 +201,6 @@ def epydoc_contract(f):
                               for field, argument, description in contract.metadata
                               if field.singular == "Postcondition"]
 
-        if isinstance(f, (staticmethod, classmethod)):
-            raise NotImplementedError("Unfortunately, the @epydoc_contract decorator is not supported "
-                                      "for either staticmethod or classmethod functions.")
-        elif isinstance(contract, apidoc.RoutineDoc):
-            dm = contract.defining_module
-            f_location = "%s module (%s), %s()" % (contract.defining_module.canonical_name,
-                                                   contract.defining_module.filename,
-                                                   ".".join(base_function_path + [f.__name__]))
-        else:
-            raise Exception("@epydoc_contract decorator is not yet supported for %s types!" % type(contract))
 
         # ---
 
@@ -277,6 +280,7 @@ def epydoc_contract(f):
             return result
 
         # ---
+
 
         # Fix the parameters of the function
         wrapped_f.func_name = f.func_name
