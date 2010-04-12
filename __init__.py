@@ -32,15 +32,15 @@ def typed(var, types):
     >>> b = typed("abc", int) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
       ...
-    AssertionError: Variable abc of type <type 'str'> not among the allowed types: <type 'int'>
+    AssertionError: Value 'abc' of type <type 'str'> is not among the allowed types: <type 'int'>
 
     >>> c = typed(None, int) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
       ...
-    AssertionError: Variable None of type <type 'NoneType'> not among the allowed types: <type 'int'>
+    AssertionError: Value None of type <type 'NoneType'> is not among the allowed types: <type 'int'>
     """
     assert isinstance(var, types), \
-        "Variable %s of type %s not among the allowed types: %s" % (var, type(var), repr(types))
+        "Value %r of type %r is not among the allowed types: %r" % (var, type(var), types)
     return var
 
 
@@ -62,12 +62,12 @@ def ntyped(var, types):
     >>> b = ntyped("abc", int) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
       ...
-    AssertionError: Variable abc of type <type 'str'> not among the allowed types: NoneType, <type 'int'>
+    AssertionError: Value 'abc' of type <type 'str'> is not among the allowed types: NoneType, <type 'int'>
 
     >>> c = ntyped(None, int) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
     """
     assert var is None or isinstance(var, types), \
-        "Variable %s of type %s not among the allowed types: NoneType, %s" % (var, type(var), repr(types))
+        "Value %r of type %r is not among the allowed types: NoneType, %r" % (var, type(var), types)
     return var
 
 
@@ -202,7 +202,7 @@ def epydoc_contract(f):
             arguments_to_validate = list(contract.arg_types)
 
             expected_types = dict((argument, parse_str_to_type(contract.arg_types[argument].to_plaintext(module._dbc_ds_linker),
-                                                               "%s argument" % argument,
+                                                               "'%s' argument" % argument,
                                                                _globals = _globals))
                                       for argument in arguments_to_validate)
 
@@ -218,12 +218,12 @@ def epydoc_contract(f):
 
                 if not isinstance(value, expected_type):
                     raise TypeError("%s: "
-                                    "The %s argument is of %s while must be of %s; "
-                                    "its value is %s" % (f_location,
+                                    "The '%s' argument is of %r while must be of %r; "
+                                    "its value is %r" % (f_location,
                                                          argument,
                                                          type(value),
                                                          expected_type,
-                                                         repr(value)))
+                                                         value))
 
             # Validate preconditions
             locals_for_preconditions = dict(_globals)
@@ -238,9 +238,9 @@ def epydoc_contract(f):
                                      "The following precondition results in logical False; "
                                      "its definition is:\n"
                                      "\t%s\n"
-                                     "and its real value is %s" % (f_location,
+                                     "and its real value is %r" % (f_location,
                                                                    description_str.strip(),
-                                                                   repr(value)))
+                                                                   value))
 
             #
             # Call the desired function
@@ -256,11 +256,11 @@ def epydoc_contract(f):
 
                 if not isinstance(result, expected_type):
                     raise TypeError("%s: " \
-                                    "The following return value is of %s while must be of %s: "
-                                    "%s" % (f_location,
+                                    "The following return value is of %r while must be of %r: "
+                                    "%r" % (f_location,
                                             type(result),
                                             expected_type,
-                                            repr(result)))
+                                            result))
 
             # Validate postconditions
             locals_for_postconditions = dict(_globals)
@@ -274,9 +274,9 @@ def epydoc_contract(f):
                                      "The following postcondition results in logical False; "
                                      "its definition is:\n"
                                      "\t%s\n"
-                                     "and its real value is %s" % (f_location,
+                                     "and its real value is %r" % (f_location,
                                                                    description_str.strip(),
-                                                                   repr(value)))
+                                                                   value))
 
             # Validations are successful
             return result
@@ -305,7 +305,7 @@ if __debug__:
         >>> r = f(1) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
         Traceback (most recent call last):
           ...
-        TypeError: ... module (...), f(): The a1 argument is of <type 'int'> \
+        TypeError: ... module (...), f(): The 'a1' argument is of <type 'int'> \
                    while must be of <type 'str'>; its value is 1
         """
 
@@ -393,7 +393,7 @@ if __debug__:
         >>> r = A.B.f(1) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
         Traceback (most recent call last):
           ...
-        TypeError: ... module (...), A.B.f(): The a1 argument is of <type 'int'> \
+        TypeError: ... module (...), A.B.f(): The 'a1' argument is of <type 'int'> \
                    while must be of <type 'str'>; its value is 1
         """
 
