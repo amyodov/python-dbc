@@ -299,7 +299,7 @@ if __debug__:
         >>> r = f(1) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
         Traceback (most recent call last):
           ...
-        TypeError: __main__ module (...), f(): The a1 argument is of <type 'int'> \
+        TypeError: ... module (...), f(): The a1 argument is of <type 'int'> \
                    while must be of <type 'str'>; its value is 1
         """
 
@@ -314,7 +314,7 @@ if __debug__:
         >>> r = f("a") # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
         Traceback (most recent call last):
           ...
-        TypeError: __main__ module (...), f(): The following return value is of <type 'str'> \
+        TypeError: ... module (...), f(): The following return value is of <type 'str'> \
                    while must be of <type 'int'>:
             'a'
         """
@@ -333,7 +333,7 @@ if __debug__:
         >>> r = f(-5, 0) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
         Traceback (most recent call last):
           ...
-        ValueError: __main__ module (...), f(): The following precondition results in logical False; \
+        ValueError: ... module (...), f(): The following precondition results in logical False; \
                     its definition is:
             a1 > 0
         and its real value is False
@@ -355,7 +355,7 @@ if __debug__:
         >>> r = f(-6, 3) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
         Traceback (most recent call last):
           ...
-        ValueError: __main__ module (...), f(): The following postcondition results in logical False; \
+        ValueError: ... module (...), f(): The following postcondition results in logical False; \
                     its definition is:
             result > 0
         and its real value is False
@@ -364,7 +364,7 @@ if __debug__:
         >>> r = f(4, 6) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
         Traceback (most recent call last):
           ...
-        ValueError: __main__ module (...), f(): The following postcondition results in logical False; \
+        ValueError: ... module (...), f(): The following postcondition results in logical False; \
                     its definition is:
             result % 2
         and its real value is 0
@@ -387,7 +387,7 @@ if __debug__:
         >>> r = A.B.f(1) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
         Traceback (most recent call last):
           ...
-        TypeError: __main__ module (...), A.B.f(): The a1 argument is of <type 'int'> \
+        TypeError: ... module (...), A.B.f(): The a1 argument is of <type 'int'> \
                    while must be of <type 'str'>; its value is 1
         """
 
