@@ -1,0 +1,15 @@
+To install python-dbc:
+
+See the web page for the version of Python required.
+
+To install the package, run the following command:
+
+ python setup.py install
+
+Alternatively, just copy the whole dbc directory into a directory on
+your Python path (e.g. unix: /usr/local/lib/python2.6/site-packages,
+Windows: C:\Python276Lib\site-packages).  Only copy the dbc directory
+that's inside the distributed tarball / zip archive, not the entire
+dbc-x.x.x directory!
+
+Alexander Myodov <amyodov@gmail.com>

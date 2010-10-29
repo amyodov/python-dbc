@@ -10,6 +10,8 @@ Design by Contract in Python.
 @url: http://code.google.com/p/python-dbc/
 """
 
+__all__ = ("typed", "ntyped", "consists_of", "epydoc_contract")
+
 from itertools import izip, chain
 import inspect
 
@@ -164,10 +166,10 @@ def epydoc_contract(f):
                 _locals = locals()
 
             try:
-                expected_value = eval(value_str, _globals, _locals)
+                expected_value = eval(value_str, dict(_globals), dict(_locals))
             except Exception, e:
-                raise SyntaxError("%s: "
-                                  "the following %s "
+                raise SyntaxError("%s:\n"
+                                  "The following %s "
                                   "could not be parsed: %s\n" % (f_location,
                                                                  entity_name,
                                                                  value_str))
@@ -182,8 +184,8 @@ def epydoc_contract(f):
                                                _locals)
 
             if not isinstance(expected_type, (type, tuple)):
-                raise SyntaxError("%s: "
-                                  "the following type definition for %s "
+                raise SyntaxError("%s:\n"
+                                  "The following type definition for %s "
                                   "should define a type rather than a %s entity: "
                                   "%s" % (f_location,
                                           entity_name,
@@ -198,6 +200,30 @@ def epydoc_contract(f):
             # For "globals" dictionary, we should use the globals of the code
             # that called the wrapper function.
             _globals = inspect.getargvalues(inspect.stack()[1][0])[3]
+
+            #function_arguments = inspct.getargvalues(inspect.stack())
+            print
+            print "..........", f.__name__
+            l = 0
+            for lev in inspect.stack():
+                r = inspect.getargvalues(lev[0])
+                print "%i:" % l, `r[3].keys()`
+                l += 1
+            #lev = inspect.stack()[1]
+            #
+            #print "0:::", r[0]
+            #if "self" in r[0] and "other" in r[0]:
+            #    print "!!!!!!!!!!!!!!!!"
+            #    print "!!!!!!!!!!!!!!!!"
+            #    print "!!!!!!!!!!!!!!!!"
+            #    print "!!!!!!!!!!!!!!!!"
+            #    print "!!!!!!!!!!!!!!!!"
+            #print "3:::", r[3].keys()
+            #print ",,,,,,,,,,"
+
+            #function_arguments = inspect.getargvalues(inspect.stack()[1][0])
+            print
+            print "GL0", f.__name__, `_globals.keys()`
 
             arguments_to_validate = list(contract.arg_types)
 
@@ -217,7 +243,7 @@ def epydoc_contract(f):
                 expected_type = expected_types[argument]
 
                 if not isinstance(value, expected_type):
-                    raise TypeError("%s: "
+                    raise TypeError("%s:\n"
                                     "The '%s' argument is of %r while must be of %r; "
                                     "its value is %r" % (f_location,
                                                          argument,
@@ -226,15 +252,15 @@ def epydoc_contract(f):
                                                          value))
 
             # Validate preconditions
-            locals_for_preconditions = dict(_globals)
-            locals_for_preconditions.update(values)
+            locals_for_preconditions = values
+            print "GL1", f.__name__, `_globals.keys()`
             for description_str in preconditions:
                 value = parse_str_to_value(description_str,
                                            "precondition definition",
                                            _globals = _globals,
                                            _locals = locals_for_preconditions)
                 if not value:
-                    raise ValueError("%s: "
+                    raise ValueError("%s:\n"
                                      "The following precondition results in logical False; "
                                      "its definition is:\n"
                                      "\t%s\n"
@@ -245,7 +271,9 @@ def epydoc_contract(f):
             #
             # Call the desired function
             #
+            glk0 = _globals.keys()
             result = f(*args, **kwargs)
+            glk1 = _globals.keys()
 
             # Validate return value
             if contract.return_type is not None:
@@ -255,7 +283,7 @@ def epydoc_contract(f):
                                                   _globals = _globals)
 
                 if not isinstance(result, expected_type):
-                    raise TypeError("%s: " \
+                    raise TypeError("%s:\n"
                                     "The following return value is of %r while must be of %r: "
                                     "%r" % (f_location,
                                             type(result),
@@ -263,14 +291,14 @@ def epydoc_contract(f):
                                             result))
 
             # Validate postconditions
-            locals_for_postconditions = dict(_globals)
-            locals_for_postconditions.update({"result": result})
+            locals_for_postconditions = {"result": result}
             for description_str in postconditions:
                 value = parse_str_to_value(description_str,
                                            "postcondition definition",
-                                           _locals = locals_for_postconditions)
+                                           _locals = locals_for_postconditions,
+                                           _globals = _globals)
                 if not value:
-                    raise ValueError("%s: "
+                    raise ValueError("%s:\n"
                                      "The following postcondition results in logical False; "
                                      "its definition is:\n"
                                      "\t%s\n"
@@ -289,115 +317,3 @@ def epydoc_contract(f):
         return wrapped_f
     else:
         return f
-
-
-
-if __debug__:
-
-    def test_type():
-        """
-        >>> @epydoc_contract
-        ... def f(a1):
-        ...     '''
-        ...     @type a1: str
-        ...     '''
-        ...     return a1 + 1
-        >>> r = f(1) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
-        Traceback (most recent call last):
-          ...
-        TypeError: ... module (...), f(): The 'a1' argument is of <type 'int'> \
-                   while must be of <type 'str'>; its value is 1
-        """
-
-    def test_rtype():
-        """
-        >>> @epydoc_contract
-        ... def f(a1):
-        ...     '''
-        ...     @rtype: int
-        ...     '''
-        ...     return a1
-        >>> r = f("a") # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
-        Traceback (most recent call last):
-          ...
-        TypeError: ... module (...), f(): The following return value is of <type 'str'> \
-                   while must be of <type 'int'>:
-            'a'
-        """
-
-    def test_precondition():
-        """
-        >>> @epydoc_contract
-        ... def f(a1, a2):
-        ...     '''
-        ...     @precondition: a1 > 0
-        ...     @precondition: a2 > 0
-        ...     @precondition: a1 + a2 > 0
-        ...     '''
-        ...     return a1 + a2
-        >>> r = f(5, 6) # Nothing wrong
-        >>> r = f(-5, 0) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
-        Traceback (most recent call last):
-          ...
-        ValueError: ... module (...), f(): The following precondition results in logical False; \
-                    its definition is:
-            a1 > 0
-        and its real value is False
-        """
-
-    def test_postcondition():
-        """
-        >>> @epydoc_contract
-        ... def f(a1, a2):
-        ...     '''
-        ...     @postcondition: result > 0
-        ...     @postcondition: result % 2
-        ...     '''
-        ...     return a1 + a2
-
-        >>> r = f(3, 6) # Nothing wrong
-
-        >>> # Test explicit boolean expression
-        >>> r = f(-6, 3) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
-        Traceback (most recent call last):
-          ...
-        ValueError: ... module (...), f(): The following postcondition results in logical False; \
-                    its definition is:
-            result > 0
-        and its real value is False
-
-        >>> # Test implicit boolean expression. 4 + 6 = 10, 10 % 2 = 0, bool(0) = False
-        >>> r = f(4, 6) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
-        Traceback (most recent call last):
-          ...
-        ValueError: ... module (...), f(): The following postcondition results in logical False; \
-                    its definition is:
-            result % 2
-        and its real value is 0
-        """
-
-    def test_class():
-        """
-        >>> class A(object):
-        ...     class B(object):
-        ...         @staticmethod
-        ...         @epydoc_contract
-        ...         def f(a1):
-        ...             '''
-        ...             @type a1: str
-        ...             '''
-        ...             return a1
-
-        >>> r = A.B.f("")
-
-        >>> r = A.B.f(1) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
-        Traceback (most recent call last):
-          ...
-        TypeError: ... module (...), A.B.f(): The 'a1' argument is of <type 'int'> \
-                   while must be of <type 'str'>; its value is 1
-        """
-
-
-if __name__ == "__main__":
-    import doctest
-    doctest.testmod()
