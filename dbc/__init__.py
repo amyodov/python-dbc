@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 """
 Design by Contract in Python.
 
@@ -10,7 +10,7 @@ Design by Contract in Python.
 @url: http://code.google.com/p/python-dbc/
 """
 
-__all__ = ("typed", "ntyped", "consists_of", "epydoc_contract")
+__all__ = ("typed", "ntyped", "consists_of", "contract_epydoc")
 
 from itertools import izip, chain
 import inspect
@@ -95,7 +95,72 @@ def consists_of(seq, types):
     return all(isinstance(element, types) for element in seq)
 
 
-def epydoc_contract(f):
+def _rpdb2():
+    import rpdb2
+    rpdb2.start_embedded_debugger("123")
+
+
+def _get_function_base_path_from_stack(stack):
+    """
+    Given a stack (in the format as inspect.stack() returns),
+    construct the path to the function (it may be a top-level in the module or defined in some deeper namespace,
+    such as a class or another function).
+
+    @param stack: The list similar in format to the result of inspect.stack().
+
+    @return: The function fully qualified namespaces
+             (with all intermediate namespaces where it is defined). The name of the function itself is not included.
+    @rtype: basestring
+    """
+    base_function_list = [i[3] for i in reversed(stack)]
+    # Start from a new module.
+    if "<module>" in base_function_list:
+        del base_function_list[:base_function_list.index("<module>") + 1]
+
+    return ".".join(base_function_list)
+
+
+def _parse_str_to_value(f_path, value_str, entity_name, _globals, _locals):
+    """
+    This function performs parsing
+    """
+    try:
+        expected_value = eval(value_str, dict(_globals), dict(_locals))
+    except Exception, e:
+        import traceback; traceback.print_exc()
+        raise SyntaxError("%s:\n"
+                          "The following %s "
+                          "could not be parsed: %s\n" % (f_path,
+                                                         entity_name,
+                                                         value_str))
+    return expected_value
+
+# ---
+
+def _parse_str_to_type(f_path, type_str, entity_name, _globals = None, _locals = None):
+    """
+    @raises SyntaxError: If the string cannot be parsed as a valid type.
+    """
+    expected_type = _parse_str_to_value(f_path,
+                                        type_str,
+                                        "type definition for %s" % entity_name,
+                                        _globals,
+                                        _locals)
+
+    if not isinstance(expected_type, (type, tuple)):
+        raise SyntaxError("%s:\n"
+                          "The following type definition for %s "
+                          "should define a type rather than a %s entity: "
+                          "%s" % (f_path,
+                                  entity_name,
+                                  type(expected_type),
+                                  type_str))
+
+    return expected_type
+
+
+
+def contract_epydoc(f):
     """
     The decorator for any functions which have a epydoc-formatted docstring.
     It validates the function inputs and output against the contract defined by the epydoc description.
@@ -122,16 +187,17 @@ def epydoc_contract(f):
         try:
             from epydoc import apidoc, docbuilder, markup
         except ImportError:
-            raise ImportError("To use epydoc_contract() function, "
+            raise ImportError("To use contract_epydoc() function, "
                               "you must have the epydoc module (often called python-epydoc) installed.\n"
                               "For more details about epydoc installation, see http://epydoc.sourceforge.net/")
 
+        # Given a method/function, get the module where the function is defined.
         module = inspect.getmodule(f)
-        base_function_list = [i[3] for i in inspect.stack()]
-        if "<module>" in base_function_list:
-            base_function_list = base_function_list[:base_function_list.index("<module>")]
+        _stack = inspect.stack()[1:]
 
-        base_function_path = list(reversed(base_function_list))[:-1]
+        # The function/method marked with @contract_epydoc may be either top-level in the module,
+        # or defined inside some namespace, like a class or another function.
+        base_function_path = _get_function_base_path_from_stack(_stack)
 
         if not hasattr(module, "_dbc_ds_linker"):
             module._dbc_ds_linker = markup.DocstringLinker()
@@ -146,68 +212,35 @@ def epydoc_contract(f):
                               if field.singular == "Postcondition"]
 
         if isinstance(f, (staticmethod, classmethod)):
-            raise NotImplementedError("Unfortunately, the @epydoc_contract decorator is not supported "
-                                      "for either staticmethod or classmethod functions.")
+            raise NotImplementedError("The @contract_epydoc decorator is not supported "
+                                      "for either staticmethod or classmethod functions; "
+                                      "please use it before (below) turning a function into "
+                                      "a static method or a class method.")
         elif isinstance(contract, apidoc.RoutineDoc):
             dm = contract.defining_module
-            f_location = "%s module (%s), %s()" % (contract.defining_module.canonical_name,
-                                                   contract.defining_module.filename,
-                                                   ".".join(base_function_path + [f.__name__]))
+            f_path = "%(mod_name)s module (%(mod_file_path)s), %(func_name)s()" % {
+                "mod_name"      : contract.defining_module.canonical_name,
+                "mod_file_path" : contract.defining_module.filename,
+                "func_name"     : "%s.%s" % (base_function_path, f.__name__)
+                }
         else:
-            raise Exception("@epydoc_contract decorator is not yet supported for %s types!" % type(contract))
+            raise Exception("@contract_epydoc decorator is not yet supported for %s types!" % type(contract))
 
-
-        # ---
-
-        def parse_str_to_value(value_str, entity_name, _globals = None, _locals = None):
-            if _globals is None:
-                _globals = globals()
-            if _locals is None:
-                _locals = locals()
-
-            try:
-                expected_value = eval(value_str, dict(_globals), dict(_locals))
-            except Exception, e:
-                raise SyntaxError("%s:\n"
-                                  "The following %s "
-                                  "could not be parsed: %s\n" % (f_location,
-                                                                 entity_name,
-                                                                 value_str))
-            return expected_value
-
-        # ---
-
-        def parse_str_to_type(type_str, entity_name, _globals = None, _locals = None):
-            expected_type = parse_str_to_value(type_str,
-                                               "type definition for %s" % entity_name,
-                                               _globals,
-                                               _locals)
-
-            if not isinstance(expected_type, (type, tuple)):
-                raise SyntaxError("%s:\n"
-                                  "The following type definition for %s "
-                                  "should define a type rather than a %s entity: "
-                                  "%s" % (f_location,
-                                          entity_name,
-                                          type(expected_type),
-                                          type_str))
-
-            return expected_type
+        #
+        # At this stage we have f_path
 
         # ---
 
         def wrapped_f(*args, **kwargs):
+            _stack = inspect.stack()
             # For "globals" dictionary, we should use the globals of the code
             # that called the wrapper function.
-            _globals = inspect.getargvalues(inspect.stack()[1][0])[3]
+            _globals = inspect.getargvalues(_stack[1][0])[3]
 
             #function_arguments = inspct.getargvalues(inspect.stack())
-            print
-            print "..........", f.__name__
             l = 0
-            for lev in inspect.stack():
+            for lev in _stack:
                 r = inspect.getargvalues(lev[0])
-                print "%i:" % l, `r[3].keys()`
                 l += 1
             #lev = inspect.stack()[1]
             #
@@ -222,14 +255,15 @@ def epydoc_contract(f):
             #print ",,,,,,,,,,"
 
             #function_arguments = inspect.getargvalues(inspect.stack()[1][0])
-            print
-            print "GL0", f.__name__, `_globals.keys()`
+            #print
+            #print "GL0", f.__name__, `_globals.keys()`
 
             arguments_to_validate = list(contract.arg_types)
 
-            expected_types = dict((argument, parse_str_to_type(contract.arg_types[argument].to_plaintext(module._dbc_ds_linker),
-                                                               "'%s' argument" % argument,
-                                                               _globals = _globals))
+            expected_types = dict((argument, _parse_str_to_type(f_path,
+                                                                contract.arg_types[argument].to_plaintext(module._dbc_ds_linker),
+                                                                "'%s' argument" % argument,
+                                                                _globals = _globals))
                                       for argument in arguments_to_validate)
 
 
@@ -245,7 +279,7 @@ def epydoc_contract(f):
                 if not isinstance(value, expected_type):
                     raise TypeError("%s:\n"
                                     "The '%s' argument is of %r while must be of %r; "
-                                    "its value is %r" % (f_location,
+                                    "its value is %r" % (f_path,
                                                          argument,
                                                          type(value),
                                                          expected_type,
@@ -253,18 +287,19 @@ def epydoc_contract(f):
 
             # Validate preconditions
             locals_for_preconditions = values
-            print "GL1", f.__name__, `_globals.keys()`
+            #print "GL1", f.__name__, `_globals.keys()`
             for description_str in preconditions:
-                value = parse_str_to_value(description_str,
-                                           "precondition definition",
-                                           _globals = _globals,
-                                           _locals = locals_for_preconditions)
+                value = _parse_str_to_value(f_path,
+                                            description_str,
+                                            "precondition definition",
+                                            _globals = _globals,
+                                            _locals = locals_for_preconditions)
                 if not value:
                     raise ValueError("%s:\n"
                                      "The following precondition results in logical False; "
                                      "its definition is:\n"
                                      "\t%s\n"
-                                     "and its real value is %r" % (f_location,
+                                     "and its real value is %r" % (f_path,
                                                                    description_str.strip(),
                                                                    value))
 
@@ -278,14 +313,15 @@ def epydoc_contract(f):
             # Validate return value
             if contract.return_type is not None:
 
-                expected_type = parse_str_to_type(contract.return_type.to_plaintext(module._dbc_ds_linker),
-                                                  "return value",
-                                                  _globals = _globals)
+                expected_type = _parse_str_to_type(f_path,
+                                                   contract.return_type.to_plaintext(module._dbc_ds_linker),
+                                                   "return value",
+                                                   _globals = _globals)
 
                 if not isinstance(result, expected_type):
                     raise TypeError("%s:\n"
                                     "The following return value is of %r while must be of %r: "
-                                    "%r" % (f_location,
+                                    "%r" % (f_path,
                                             type(result),
                                             expected_type,
                                             result))
@@ -293,16 +329,17 @@ def epydoc_contract(f):
             # Validate postconditions
             locals_for_postconditions = {"result": result}
             for description_str in postconditions:
-                value = parse_str_to_value(description_str,
-                                           "postcondition definition",
-                                           _locals = locals_for_postconditions,
-                                           _globals = _globals)
+                value = _parse_str_to_value(f_path,
+                                            description_str,
+                                            "postcondition definition",
+                                            _locals = locals_for_postconditions,
+                                            _globals = _globals)
                 if not value:
                     raise ValueError("%s:\n"
                                      "The following postcondition results in logical False; "
                                      "its definition is:\n"
                                      "\t%s\n"
-                                     "and its real value is %r" % (f_location,
+                                     "and its real value is %r" % (f_path,
                                                                    description_str.strip(),
                                                                    value))
 
