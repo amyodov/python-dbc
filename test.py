@@ -10,8 +10,10 @@ Design by Contract in Python - test module.
 """
 from dbc import contract_epydoc
 #import test
+from test import x
+from types import LambdaType
 
-#@contract_epydoc
+@contract_epydoc
 def f2(a1):
     """
     @type a1: str
@@ -19,26 +21,18 @@ def f2(a1):
     return a1
 
 
-class A(object):
-    class B:
-        @staticmethod
-        @contract_epydoc
-        def m1(a2):
-            """
-            @type a2: (int, long)
-            """
-            return a2 + 5
 
 
 def test_type():
     """
-    >> r = f2(1) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
+    >>> r = f2(1) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
       ...
-    TypeError: test.type module (...), f2():
+    TypeError: __main__ module (...), f2():
     The 'a1' argument is of <type 'int'> while must be of <type 'str'>; its value is 1
 
-    >>> A.B.m1(17)
+    >>> tuptup = tuple
+    >>> x.A.B.m1(17)
     22
     """
 

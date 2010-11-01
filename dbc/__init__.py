@@ -12,8 +12,10 @@ Design by Contract in Python.
 
 __all__ = ("typed", "ntyped", "consists_of", "contract_epydoc")
 
+import sys, inspect
 from itertools import izip, chain
-import inspect
+from types import NoneType
+from pprint import pprint
 
 
 def typed(var, types):
@@ -79,6 +81,7 @@ def consists_of(seq, types):
 
     @param seq: The sequence which elements are to be typed.
 
+
     @param types: A tuple of types to check.
     @type types: tuple
 
@@ -135,7 +138,6 @@ def _parse_str_to_value(f_path, value_str, entity_name, _globals, _locals):
                                                          value_str))
     return expected_value
 
-# ---
 
 def _parse_str_to_type(f_path, type_str, entity_name, _globals = None, _locals = None):
     """
@@ -199,6 +201,7 @@ def contract_epydoc(f):
         # or defined inside some namespace, like a class or another function.
         base_function_path = _get_function_base_path_from_stack(_stack)
 
+        # Now, analyze the epydoc comments.
         if not hasattr(module, "_dbc_ds_linker"):
             module._dbc_ds_linker = markup.DocstringLinker()
 
@@ -217,55 +220,60 @@ def contract_epydoc(f):
                                       "please use it before (below) turning a function into "
                                       "a static method or a class method.")
         elif isinstance(contract, apidoc.RoutineDoc):
-            dm = contract.defining_module
             f_path = "%(mod_name)s module (%(mod_file_path)s), %(func_name)s()" % {
-                "mod_name"      : contract.defining_module.canonical_name,
+                "mod_name"      : module.__name__,
                 "mod_file_path" : contract.defining_module.filename,
-                "func_name"     : "%s.%s" % (base_function_path, f.__name__)
+                "func_name"     : ".".join(filter(None,
+                                                  (base_function_path, f.__name__))),
                 }
         else:
             raise Exception("@contract_epydoc decorator is not yet supported for %s types!" % type(contract))
 
+        _stack = inspect.stack()
+        def_frame = _stack[1][0]
+        # Copy the dictionaries!
+        def_globals = dict(def_frame.f_globals)
+        #def_globals_with_nonetype = dict(def_globals); def_globals_with_nonetype["NoneType"] = NoneType
+        def_locals = dict(def_frame.f_locals)
+
         #
-        # At this stage we have f_path
+        # At this stage we have "f_path" variable containing the fully qualified name
+        # of the called function.
+        # Also, def_globals and def_locals contain the globals/locals of the code
+        # where the decorated function was defined.
 
         # ---
 
         def wrapped_f(*args, **kwargs):
             _stack = inspect.stack()
+            # Stack now:
+            # [0] is the level inside wrapped_f.
+            # [1] is the caller.
+
             # For "globals" dictionary, we should use the globals of the code
             # that called the wrapper function.
-            _globals = inspect.getargvalues(_stack[1][0])[3]
+            #_rpdb2()
+            #_globals = inspect.getargvalues(_stack[1][0])[3]
 
-            #function_arguments = inspct.getargvalues(inspect.stack())
-            l = 0
-            for lev in _stack:
-                r = inspect.getargvalues(lev[0])
-                l += 1
-            #lev = inspect.stack()[1]
-            #
-            #print "0:::", r[0]
-            #if "self" in r[0] and "other" in r[0]:
-            #    print "!!!!!!!!!!!!!!!!"
-            #    print "!!!!!!!!!!!!!!!!"
-            #    print "!!!!!!!!!!!!!!!!"
-            #    print "!!!!!!!!!!!!!!!!"
-            #    print "!!!!!!!!!!!!!!!!"
-            #print "3:::", r[3].keys()
-            #print ",,,,,,,,,,"
+            call_frame = _stack[1][0]
 
-            #function_arguments = inspect.getargvalues(inspect.stack()[1][0])
-            #print
-            #print "GL0", f.__name__, `_globals.keys()`
+            call_globals = call_frame.f_globals
+            call_locals = call_frame.f_locals
 
             arguments_to_validate = list(contract.arg_types)
+            #print f_path
+            #print "ARGUMENTS:", arguments_to_validate
 
-            expected_types = dict((argument, _parse_str_to_type(f_path,
-                                                                contract.arg_types[argument].to_plaintext(module._dbc_ds_linker),
-                                                                "'%s' argument" % argument,
-                                                                _globals = _globals))
-                                      for argument in arguments_to_validate)
-
+            try:
+                expected_types = dict((argument,
+                                       _parse_str_to_type(f_path,
+                                                          contract.arg_types[argument].to_plaintext(module._dbc_ds_linker),
+                                                          "'%s' argument" % argument,
+                                                          _globals = def_globals,
+                                                          _locals  = def_locals))
+                                          for argument in arguments_to_validate)
+            except Exception, e:
+                raise e
 
             # All values
             values = dict(chain(izip(contract.posargs, args),
@@ -285,14 +293,15 @@ def contract_epydoc(f):
                                                          expected_type,
                                                          value))
 
-            # Validate preconditions
+            # Validate preconditions.
+            # Preconditions may use the globals from the function definition,
+            # as well as the function arguments.
             locals_for_preconditions = values
-            #print "GL1", f.__name__, `_globals.keys()`
             for description_str in preconditions:
                 value = _parse_str_to_value(f_path,
                                             description_str,
                                             "precondition definition",
-                                            _globals = _globals,
+                                            _globals = def_globals,
                                             _locals = locals_for_preconditions)
                 if not value:
                     raise ValueError("%s:\n"
@@ -306,9 +315,7 @@ def contract_epydoc(f):
             #
             # Call the desired function
             #
-            glk0 = _globals.keys()
             result = f(*args, **kwargs)
-            glk1 = _globals.keys()
 
             # Validate return value
             if contract.return_type is not None:
@@ -316,7 +323,8 @@ def contract_epydoc(f):
                 expected_type = _parse_str_to_type(f_path,
                                                    contract.return_type.to_plaintext(module._dbc_ds_linker),
                                                    "return value",
-                                                   _globals = _globals)
+                                                   _globals = def_globals,
+                                                   _locals = values)
 
                 if not isinstance(result, expected_type):
                     raise TypeError("%s:\n"
@@ -326,14 +334,18 @@ def contract_epydoc(f):
                                             expected_type,
                                             result))
 
-            # Validate postconditions
-            locals_for_postconditions = {"result": result}
+            # Validate postconditions.
+            # Postconditions may use the globals from the function definition,
+            # as well as the function arguments and the special "result" parameter.
+            locals_for_postconditions = dict(locals_for_preconditions)
+            locals_for_postconditions["result"] = result
             for description_str in postconditions:
                 value = _parse_str_to_value(f_path,
                                             description_str,
                                             "postcondition definition",
-                                            _locals = locals_for_postconditions,
-                                            _globals = _globals)
+                                            _globals = def_globals,
+                                            _locals = locals_for_postconditions)
+
                 if not value:
                     raise ValueError("%s:\n"
                                      "The following postcondition results in logical False; "
@@ -345,9 +357,6 @@ def contract_epydoc(f):
 
             # Validations are successful
             return result
-
-        # ---
-
 
         # Fix the parameters of the function
         wrapped_f.func_name = f.func_name
