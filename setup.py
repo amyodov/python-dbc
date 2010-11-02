@@ -7,7 +7,13 @@ such as enforcing the contracts defined in the epydoc code documentation.
 For the most important functionality of this module, you must have epydoc installed.
 Please refer to epydoc site or your Unix/Linux distribution regarding the installation details.
 """
-from distutils.core import setup
+try:
+    from setuptools import setup
+except:
+    from distutils.core import setup
+
+
+from contrib.distutils_googlecode_upload.googlecode_distutils_upload import upload as googlecode_upload
 
 # Classifiers as in http://pypi.python.org/pypi?:action=list_classifiers
 CLASSIFIERS = """\
@@ -40,4 +46,5 @@ setup(
     classifiers = [c for c in CLASSIFIERS.split("\n") if c],
     license = "New BSD License",
     platforms = ["any"],
+    cmdclass = {"googlecode_upload": googlecode_upload}
 )
