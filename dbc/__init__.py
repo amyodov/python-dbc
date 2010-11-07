@@ -277,12 +277,19 @@ def contract_epydoc(f):
             except Exception, e:
                 raise e
 
-            # All values
-            values = dict(chain(izip(contract.posargs, args),
-                                kwargs.iteritems()))
+            # All values:
+            # First try to use the default values;
+            # then add the positional arguments,
+            # then add the named arguments.
+            values = dict(chain(izip(contract.posargs,
+                                     f.func_defaults if f.func_defaults is not None else []),
+                                izip(contract.posargs, args),
+                                kwargs.iteritems()
+                               ))
 
             # Validate arguments
             for argument in arguments_to_validate:
+                assert argument in values, "%r not in %r" % (argument, values)
                 value = values[argument]
                 expected_type = expected_types[argument]
 
