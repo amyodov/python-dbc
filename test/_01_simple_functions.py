@@ -20,8 +20,6 @@ def f1(a1):
     return a1 + 5
 
 
-
-
 type2 = float
 
 class A(object):

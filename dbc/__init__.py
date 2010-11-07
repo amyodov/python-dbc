@@ -118,7 +118,10 @@ def _get_function_base_path_from_stack(stack):
     base_function_list = [i[3] for i in reversed(stack)]
     # Start from a new module.
     if "<module>" in base_function_list:
-        del base_function_list[:base_function_list.index("<module>") + 1]
+        rindex = max(i
+                         for i, v in enumerate(base_function_list)
+                         if v == "<module>" )
+        del base_function_list[:rindex + 1]
 
     return ".".join(base_function_list)
 
@@ -231,38 +234,37 @@ def contract_epydoc(f):
 
         _stack = inspect.stack()
         def_frame = _stack[1][0]
-        # Copy the dictionaries!
-        def_globals = dict(def_frame.f_globals)
-        #def_globals_with_nonetype = dict(def_globals); def_globals_with_nonetype["NoneType"] = NoneType
-        def_locals = dict(def_frame.f_locals)
+
+        # Don't copy the dictionaries, but refer to the original stack frame
+        def_globals = def_frame.f_globals
+        def_locals = def_frame.f_locals
 
         #
         # At this stage we have "f_path" variable containing the fully qualified name
         # of the called function.
         # Also, def_globals and def_locals contain the globals/locals of the code
         # where the decorated function was defined.
+        #
 
-        # ---
 
         def wrapped_f(*args, **kwargs):
             _stack = inspect.stack()
+
+            # Do we actually want to use the globals with NoneType already imported?
+            #def_globals_with_nonetype = dict(def_globals); def_globals_with_nonetype["NoneType"] = NoneType
+
             # Stack now:
             # [0] is the level inside wrapped_f.
             # [1] is the caller.
 
             # For "globals" dictionary, we should use the globals of the code
             # that called the wrapper function.
-            #_rpdb2()
-            #_globals = inspect.getargvalues(_stack[1][0])[3]
-
             call_frame = _stack[1][0]
 
             call_globals = call_frame.f_globals
             call_locals = call_frame.f_locals
 
             arguments_to_validate = list(contract.arg_types)
-            #print f_path
-            #print "ARGUMENTS:", arguments_to_validate
 
             try:
                 expected_types = dict((argument,

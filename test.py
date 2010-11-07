@@ -63,9 +63,20 @@ def test_sanity_bad():
 
 def test_sanity_remote_bad():
     """
-    >>> tuptup = tuple
-    >>> test._01_simple_functions.A.B.m1(17)
+    >> tuptup = tuple
+    >> test._01_simple_functions.A.B.m1(17)
     22
+
+    >>> mytype = test._02_class.MyType
+    >>> a = mytype(42)
+    >>> a
+    <MyType: 42>
+
+    >>> a + 15 # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
+    Traceback (most recent call last):
+      ...
+    TypeError: test._02_class module (...), MyType.__add__():
+    The 'other' argument is of <type 'int'> while must be of <class 'test._02_class.MyType'>; its value is 15
     """
 
 
