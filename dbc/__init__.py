@@ -284,7 +284,8 @@ def contract_epydoc(f):
             # then add the positional arguments,
             # then add the named arguments.
             values = dict(chain(izip(contract.posargs,
-                                     f.func_defaults if f.func_defaults is not None else []),
+                                     ((df.pyval if df is not None else None)
+                                          for df in contract.posarg_defaults)),
                                 izip(contract.posargs, args),
                                 kwargs.iteritems()
                                ))
