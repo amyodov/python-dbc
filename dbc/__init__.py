@@ -14,6 +14,7 @@ __all__ = ("typed", "ntyped", "consists_of", "contract_epydoc")
 
 import sys, inspect
 from itertools import izip, chain
+from functools import update_wrapper
 from types import NoneType
 from pprint import pprint
 
@@ -367,9 +368,6 @@ def contract_epydoc(f):
             # Validations are successful
             return result
 
-        # Fix the parameters of the function
-        wrapped_f.func_name = f.func_name
-        wrapped_f.__doc__ = f.__doc__
-        return wrapped_f
+        return update_wrapper(wrapped_f, f)
     else:
         return f
