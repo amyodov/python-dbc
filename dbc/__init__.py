@@ -369,6 +369,7 @@ def contract_epydoc(f):
 
         # Fix the parameters of the function
         wrapped_f.func_name = f.func_name
+        wrapped_f.__doc__ = f.__doc__
         return wrapped_f
     else:
         return f
