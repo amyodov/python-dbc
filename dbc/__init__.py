@@ -15,7 +15,7 @@ __all__ = ("typed", "ntyped", "consists_of", "contract_epydoc")
 import sys, inspect
 from itertools import izip, chain
 from functools import wraps
-from types import NoneType
+from types import NoneType, ClassType
 from pprint import pprint
 
 
@@ -153,7 +153,7 @@ def _parse_str_to_type(f_path, type_str, entity_name, _globals = None, _locals =
                                         _globals,
                                         _locals)
 
-    if not isinstance(expected_type, (type, tuple)):
+    if not isinstance(expected_type, (type, tuple, ClassType)):
         raise SyntaxError("%s:\n"
                           "The following type definition for %s "
                           "should define a type rather than a %s entity: "
