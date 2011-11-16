@@ -2,6 +2,18 @@
 """
 Design by Contract in Python.
 
+Two module-level variables are available to control the behaviour:
+
+1. C{ENABLED} - controls whether the whole functionality is enabled. The best use case is to write
+    something like C{dbc.ENABLED = __debug__} after the first import and before the first use.
+    Enabling it will consume more memory and CPU cycles for the wrapped function,
+    so you should not enable it in the release builds.
+    Default value it True.
+2. C{USE_EPYDOC_CACHE} - controls whether the epydoc linker is reused and cached between calls
+    to contract_epydoc. This may occupy and even leak memory in rare cases (though it is obviously
+    less important than enabling the whole functionality).
+    Default value it True.
+
 @description: This project enables to use the basics of Design by Contract capabilities in Python,
               such as enforcing the contracts defined in the epydoc documentation.
 
@@ -17,6 +29,14 @@ from itertools import izip, chain
 from functools import wraps
 from types import NoneType, ClassType
 from pprint import pprint
+
+
+# Is the functionality enabled? May leak memory under load and heavy
+# dynamic function construction, so better enable it only in release code.
+ENABLED = True
+# Are the epydoc parsers cached? May hog memory a bit.
+USE_EPYDOC_CACHE = True
+
 
 
 def typed(var, types):
@@ -189,7 +209,7 @@ def contract_epydoc(f):
     @param f: The function which epydoc documentation should be verified.
     @precondition: callable(f)
     """
-    if __debug__:
+    if ENABLED:
         try:
             from epydoc import apidoc, docbuilder, markup
         except ImportError:
@@ -205,16 +225,22 @@ def contract_epydoc(f):
         # or defined inside some namespace, like a class or another function.
         base_function_path = _get_function_base_path_from_stack(_stack)
 
-        # Now, analyze the epydoc comments.
-        if not hasattr(module, "_dbc_ds_linker"):
-            module._dbc_ds_linker = markup.DocstringLinker()
+        # Now, analyze the epydoc comments,
+        # and maybe cacke the documentation linker.
+        if hasattr(module, "_dbc_ds_linker"):
+            _dbc_ds_linker = module._dbc_ds_linker
+        else:
+            _dbc_ds_linker = markup.DocstringLinker()
+            if USE_EPYDOC_CACHE:
+                module._dbc_ds_linker = _dbc_ds_linker
+
 
         contract = docbuilder.build_doc(f)
 
-        preconditions = [description.to_plaintext(module._dbc_ds_linker)
+        preconditions = [description.to_plaintext(_dbc_ds_linker)
                              for field, argument, description in contract.metadata
                              if field.singular == "Precondition"]
-        postconditions = [description.to_plaintext(module._dbc_ds_linker)
+        postconditions = [description.to_plaintext(_dbc_ds_linker)
                               for field, argument, description in contract.metadata
                               if field.singular == "Postcondition"]
 
@@ -271,7 +297,7 @@ def contract_epydoc(f):
             try:
                 expected_types = dict((argument,
                                        _parse_str_to_type(f_path,
-                                                          contract.arg_types[argument].to_plaintext(module._dbc_ds_linker),
+                                                          contract.arg_types[argument].to_plaintext(_dbc_ds_linker),
                                                           "'%s' argument" % argument,
                                                           _globals = def_globals,
                                                           _locals  = def_locals))
@@ -333,11 +359,10 @@ def contract_epydoc(f):
             if contract.return_type is not None:
 
                 expected_type = _parse_str_to_type(f_path,
-                                                   contract.return_type.to_plaintext(module._dbc_ds_linker),
+                                                   contract.return_type.to_plaintext(_dbc_ds_linker),
                                                    "return value",
                                                    _globals = def_globals,
                                                    _locals = values)
-
                 if not isinstance(result, expected_type):
                     raise TypeError("%s:\n"
                                     "The following return value is of %r while must be of %r: "
