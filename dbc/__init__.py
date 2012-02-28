@@ -22,13 +22,12 @@ Two module-level variables are available to control the behaviour:
 @url: http://code.google.com/p/python-dbc/
 """
 
-__all__ = ("typed", "ntyped", "consists_of", "contract_epydoc")
+__all__ = ('typed', 'ntyped', 'consists_of', 'contract_epydoc')
 
 import sys, inspect
 from itertools import izip, chain
 from functools import wraps
 from types import NoneType, ClassType
-from pprint import pprint
 
 
 # Is the functionality enabled? May leak memory under load and heavy
@@ -50,11 +49,11 @@ def typed(var, types):
 
     @returns: The var argument.
 
-    >>> a = typed("abc", str)
+    >>> a = typed('abc', str)
     >>> type(a)
     <type 'str'>
 
-    >>> b = typed("abc", int) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
+    >>> b = typed('abc', int) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
       ...
     AssertionError: Value 'abc' of type <type 'str'> is not among the allowed types: <type 'int'>
@@ -65,7 +64,7 @@ def typed(var, types):
     AssertionError: Value None of type <type 'NoneType'> is not among the allowed types: <type 'int'>
     """
     assert isinstance(var, types), \
-        "Value %r of type %r is not among the allowed types: %r" % (var, type(var), types)
+        'Value %r of type %r is not among the allowed types: %r' % (var, type(var), types)
     return var
 
 
@@ -80,7 +79,7 @@ def ntyped(var, types):
 
     @returns: The var argument.
 
-    >>> a = ntyped("abc", str)
+    >>> a = ntyped('abc', str)
     >>> type(a)
     <type 'str'>
 
@@ -92,7 +91,7 @@ def ntyped(var, types):
     >>> c = ntyped(None, int) # doctest: +ELLIPSIS, +NORMALIZE_WHITESPACE
     """
     assert var is None or isinstance(var, types), \
-        "Value %r of type %r is not among the allowed types: NoneType, %r" % (var, type(var), types)
+        'Value %r of type %r is not among the allowed types: NoneType, %r' % (var, type(var), types)
     return var
 
 
@@ -111,9 +110,9 @@ def consists_of(seq, types):
 
     >>> consists_of([5, 6, 7], int)
     True
-    >>> consists_of([5, 6, 7, "abc"], int)
+    >>> consists_of([5, 6, 7, 'abc'], int)
     False
-    >>> consists_of([5, 6, 7, "abc"], (int, str))
+    >>> consists_of([5, 6, 7, 'abc'], (int, str))
     True
     """
     return all(isinstance(element, types) for element in seq)
@@ -121,7 +120,8 @@ def consists_of(seq, types):
 
 def _rpdb2():
     import rpdb2
-    rpdb2.start_embedded_debugger("123")
+    print('rpdb2()')
+    rpdb2.start_embedded_debugger('123')
 
 
 def _get_function_base_path_from_stack(stack):
@@ -138,13 +138,13 @@ def _get_function_base_path_from_stack(stack):
     """
     base_function_list = [i[3] for i in reversed(stack)]
     # Start from a new module.
-    if "<module>" in base_function_list:
+    if '<module>' in base_function_list:
         rindex = max(i
                          for i, v in enumerate(base_function_list)
-                         if v == "<module>" )
+                         if v == '<module>')
         del base_function_list[:rindex + 1]
 
-    return ".".join(base_function_list)
+    return '.'.join(base_function_list)
 
 
 def _parse_str_to_value(f_path, value_str, entity_name, _globals, _locals):
@@ -155,29 +155,29 @@ def _parse_str_to_value(f_path, value_str, entity_name, _globals, _locals):
         expected_value = eval(value_str, dict(_globals), dict(_locals))
     except Exception, e:
         import traceback; traceback.print_exc()
-        raise SyntaxError("%s:\n"
-                          "The following %s "
-                          "could not be parsed: %s\n" % (f_path,
+        raise SyntaxError('%s:\n'
+                          'The following %s '
+                          'could not be parsed: %s\n' % (f_path,
                                                          entity_name,
                                                          value_str))
     return expected_value
 
 
-def _parse_str_to_type(f_path, type_str, entity_name, _globals = None, _locals = None):
+def _parse_str_to_type(f_path, type_str, entity_name, _globals=None, _locals=None):
     """
     @raises SyntaxError: If the string cannot be parsed as a valid type.
     """
     expected_type = _parse_str_to_value(f_path,
                                         type_str,
-                                        "type definition for %s" % entity_name,
+                                        'type definition for %s' % entity_name,
                                         _globals,
                                         _locals)
 
     if not isinstance(expected_type, (type, tuple, ClassType)):
-        raise SyntaxError("%s:\n"
-                          "The following type definition for %s "
-                          "should define a type rather than a %s entity: "
-                          "%s" % (f_path,
+        raise SyntaxError('%s:\n'
+                          'The following type definition for %s '
+                          'should define a type rather than a %s entity: '
+                          '%s' % (f_path,
                                   entity_name,
                                   type(expected_type),
                                   type_str))
@@ -213,9 +213,9 @@ def contract_epydoc(f):
         try:
             from epydoc import apidoc, docbuilder, markup
         except ImportError:
-            raise ImportError("To use contract_epydoc() function, "
-                              "you must have the epydoc module (often called python-epydoc) installed.\n"
-                              "For more details about epydoc installation, see http://epydoc.sourceforge.net/")
+            raise ImportError('To use contract_epydoc() function, '
+                              'you must have the epydoc module (often called python-epydoc) installed.\n'
+                              'For more details about epydoc installation, see http://epydoc.sourceforge.net/')
 
         # Given a method/function, get the module where the function is defined.
         module = inspect.getmodule(f)
@@ -227,51 +227,94 @@ def contract_epydoc(f):
 
         # Now, analyze the epydoc comments,
         # and maybe cacke the documentation linker.
-        if hasattr(module, "_dbc_ds_linker"):
+        if hasattr(module, '_dbc_ds_linker'):
             _dbc_ds_linker = module._dbc_ds_linker
         else:
             _dbc_ds_linker = markup.DocstringLinker()
             if USE_EPYDOC_CACHE:
                 module._dbc_ds_linker = _dbc_ds_linker
 
-
+        # Parse function contract
         contract = docbuilder.build_doc(f)
-
-        preconditions = [description.to_plaintext(_dbc_ds_linker)
+        
+        preconditions = (description.to_plaintext(_dbc_ds_linker)
                              for field, argument, description in contract.metadata
-                             if field.singular == "Precondition"]
-        postconditions = [description.to_plaintext(_dbc_ds_linker)
+                             if field.singular == 'Precondition')
+        postconditions = (description.to_plaintext(_dbc_ds_linker)
                               for field, argument, description in contract.metadata
-                              if field.singular == "Postcondition"]
+                              if field.singular == 'Postcondition')
+        requirements = (description.to_plaintext(_dbc_ds_linker)
+                            for field, argument, description in contract.metadata
+                            if field.singular == 'Requires')
+
+        # Parse module contract (if available).
+        extra_mod_imports = {}
+        _module = contract.defining_module.pyval
+        # Now find whole-module requirements
+        
+        # Is the set of extra imports cached in the module?
+        if hasattr(_module, '_dbc_extra_locals'):  # cached
+            extra_mod_imports = _module._dbc_extra_locals
+        else:  # not cached
+            # Let's parse it by epydoc, and cache
+            try:
+                mod_contract = docbuilder.build_doc(_module)
+            except AttributeError as e:
+                if e.message == b"_Sentinel instance has no attribute '__getitem__'":
+                    # No fields in docstring, or even no docstring at all.
+                    pass
+                else:
+                    raise
+            else:
+                mod_requirements = (description.to_plaintext(_dbc_ds_linker)
+                                        for field, argument, description in mod_contract.metadata
+                                        if field.singular == 'Requires')
+
+                for r in mod_requirements:
+                    exec r in {}, extra_mod_imports
+
+            _module._dbc_extra_locals = extra_mod_imports  # cache it in the whole module
+        del _module
+        # "extra_mod_imports" now contain the additional modules to use.
+        
 
         if isinstance(f, (staticmethod, classmethod)):
-            raise NotImplementedError("The @contract_epydoc decorator is not supported "
-                                      "for either staticmethod or classmethod functions; "
-                                      "please use it before (below) turning a function into "
-                                      "a static method or a class method.")
+            raise NotImplementedError('The @contract_epydoc decorator is not supported '
+                                      'for either staticmethod or classmethod functions; '
+                                      'please use it before (below) turning a function into '
+                                      'a static method or a class method.')
         elif isinstance(contract, apidoc.RoutineDoc):
-            f_path = "%(mod_name)s module (%(mod_file_path)s), %(func_name)s()" % {
-                "mod_name"      : module.__name__,
-                "mod_file_path" : contract.defining_module.filename,
-                "func_name"     : ".".join(filter(None,
-                                                  (base_function_path, f.__name__))),
-                }
+            f_path = '%(mod_name)s module (%(mod_file_path)s), %(func_name)s()' % {
+                         'mod_name': module.__name__,
+                         'mod_file_path': contract.defining_module.filename,
+                         'func_name': '.'.join(filter(None,
+                                                      (base_function_path, f.__name__)))}
         else:
-            raise Exception("@contract_epydoc decorator is not yet supported for %s types!" % type(contract))
+            raise Exception('@contract_epydoc decorator is not yet supported for %s types!' % type(contract))
 
         _stack = inspect.stack()
         def_frame = _stack[1][0]
+        del _stack
 
         # Don't copy the dictionaries, but refer to the original stack frame
         def_globals = def_frame.f_globals
         def_locals = def_frame.f_locals
+        del def_frame
+
+        # Take some data from contract
+        arguments_to_validate = list(contract.arg_types)
 
         #
         # At this stage we have "f_path" variable containing the fully qualified name
         # of the called function.
-        # Also, def_globals and def_locals contain the globals/locals of the code
+        #
+        # Also, "def_globals" and "def_locals" contain the globals/locals of the code
         # where the decorated function was defined.
         #
+        # Other available variables are:
+        # * arguments_to_validate
+        # * contract (TODO: is it possible to avoid keeping it in memory?)
+        # * _dbc_ds_linker (TODO: is it possible to avoid keeping it in memory?)
 
 
         @wraps(f)
@@ -292,15 +335,14 @@ def contract_epydoc(f):
             call_globals = call_frame.f_globals
             call_locals = call_frame.f_locals
 
-            arguments_to_validate = list(contract.arg_types)
 
             try:
                 expected_types = dict((argument,
                                        _parse_str_to_type(f_path,
                                                           contract.arg_types[argument].to_plaintext(_dbc_ds_linker),
                                                           "'%s' argument" % argument,
-                                                          _globals = def_globals,
-                                                          _locals  = def_locals))
+                                                          _globals=def_globals,
+                                                          _locals=def_locals))
                                           for argument in arguments_to_validate)
             except Exception, e:
                 raise e
@@ -313,19 +355,18 @@ def contract_epydoc(f):
                                      ((df.pyval if df is not None else None)
                                           for df in contract.posarg_defaults)),
                                 izip(contract.posargs, args),
-                                kwargs.iteritems()
-                               ))
+                                kwargs.iteritems()))
 
             # Validate arguments
             for argument in arguments_to_validate:
-                assert argument in values, "%r not in %r" % (argument, values)
+                assert argument in values, '%r not in %r' % (argument, values)
                 value = values[argument]
                 expected_type = expected_types[argument]
 
                 if not isinstance(value, expected_type):
-                    raise TypeError("%s:\n"
+                    raise TypeError('%s:\n'
                                     "The '%s' argument is of %r while must be of %r; "
-                                    "its value is %r" % (f_path,
+                                    'its value is %r' % (f_path,
                                                          argument,
                                                          type(value),
                                                          expected_type,
@@ -338,15 +379,15 @@ def contract_epydoc(f):
             for description_str in preconditions:
                 value = _parse_str_to_value(f_path,
                                             description_str,
-                                            "precondition definition",
-                                            _globals = def_globals,
-                                            _locals = locals_for_preconditions)
+                                            'precondition definition',
+                                            _globals=def_globals,
+                                            _locals=locals_for_preconditions)
                 if not value:
-                    raise ValueError("%s:\n"
-                                     "The following precondition results in logical False; "
-                                     "its definition is:\n"
-                                     "\t%s\n"
-                                     "and its real value is %r" % (f_path,
+                    raise ValueError('%s:\n'
+                                     'The following precondition results in logical False; '
+                                     'its definition is:\n'
+                                     '\t%s\n'
+                                     'and its real value is %r' % (f_path,
                                                                    description_str.strip(),
                                                                    value))
 
@@ -360,13 +401,13 @@ def contract_epydoc(f):
 
                 expected_type = _parse_str_to_type(f_path,
                                                    contract.return_type.to_plaintext(_dbc_ds_linker),
-                                                   "return value",
-                                                   _globals = def_globals,
-                                                   _locals = values)
+                                                   'return value',
+                                                   _globals=def_globals,
+                                                   _locals=values)
                 if not isinstance(result, expected_type):
-                    raise TypeError("%s:\n"
-                                    "The following return value is of %r while must be of %r: "
-                                    "%r" % (f_path,
+                    raise TypeError('%s:\n'
+                                    'The following return value is of %r while must be of %r: '
+                                    '%r' % (f_path,
                                             type(result),
                                             expected_type,
                                             result))
@@ -375,20 +416,20 @@ def contract_epydoc(f):
             # Postconditions may use the globals from the function definition,
             # as well as the function arguments and the special "result" parameter.
             locals_for_postconditions = dict(locals_for_preconditions)
-            locals_for_postconditions["result"] = result
+            locals_for_postconditions['result'] = result
             for description_str in postconditions:
                 value = _parse_str_to_value(f_path,
                                             description_str,
-                                            "postcondition definition",
-                                            _globals = def_globals,
-                                            _locals = locals_for_postconditions)
+                                            'postcondition definition',
+                                            _globals=def_globals,
+                                            _locals=locals_for_postconditions)
 
                 if not value:
-                    raise ValueError("%s:\n"
-                                     "The following postcondition results in logical False; "
-                                     "its definition is:\n"
-                                     "\t%s\n"
-                                     "and its real value is %r" % (f_path,
+                    raise ValueError('%s:\n'
+                                     'The following postcondition results in logical False; '
+                                     'its definition is:\n'
+                                     '\t%s\n'
+                                     'and its real value is %r' % (f_path,
                                                                    description_str.strip(),
                                                                    value))
 
