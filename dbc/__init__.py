@@ -247,35 +247,36 @@ def contract_epydoc(f):
                             for field, argument, description in contract.metadata
                             if field.singular == 'Requires')
 
-        # Parse module contract (if available).
-        extra_mod_imports = {}
-        _module = contract.defining_module.pyval
-        # Now find whole-module requirements
-        
-        # Is the set of extra imports cached in the module?
-        if hasattr(_module, '_dbc_extra_locals'):  # cached
-            extra_mod_imports = _module._dbc_extra_locals
-        else:  # not cached
-            # Let's parse it by epydoc, and cache
-            try:
-                mod_contract = docbuilder.build_doc(_module)
-            except AttributeError as e:
-                if e.message == b"_Sentinel instance has no attribute '__getitem__'":
-                    # No fields in docstring, or even no docstring at all.
-                    pass
+        if False:  # TODO
+            # Parse module contract (if available).
+            extra_mod_imports = {}
+            _module = contract.defining_module.pyval
+            # Now find whole-module requirements
+            
+            # Is the set of extra imports cached in the module?
+            if hasattr(_module, '_dbc_extra_locals'):  # cached
+                extra_mod_imports = _module._dbc_extra_locals
+            else:  # not cached
+                # Let's parse it by epydoc, and cache
+                try:
+                    mod_contract = docbuilder.build_doc(_module)
+                except AttributeError as e:
+                    if e.message == b"_Sentinel instance has no attribute '__getitem__'":
+                        # No fields in docstring, or even no docstring at all.
+                        pass
+                    else:
+                        raise
                 else:
-                    raise
-            else:
-                mod_requirements = (description.to_plaintext(_dbc_ds_linker)
-                                        for field, argument, description in mod_contract.metadata
-                                        if field.singular == 'Requires')
+                    mod_requirements = (description.to_plaintext(_dbc_ds_linker)
+                                            for field, argument, description in mod_contract.metadata
+                                            if field.singular == 'Requires')
 
-                for r in mod_requirements:
-                    exec r in {}, extra_mod_imports
+                    for r in mod_requirements:
+                        exec r in {}, extra_mod_imports
 
-            _module._dbc_extra_locals = extra_mod_imports  # cache it in the whole module
-        del _module
-        # "extra_mod_imports" now contain the additional modules to use.
+                _module._dbc_extra_locals = extra_mod_imports  # cache it in the whole module
+            del _module
+            # "extra_mod_imports" now contain the additional modules to use.
         
 
         if isinstance(f, (staticmethod, classmethod)):
@@ -394,7 +395,7 @@ def contract_epydoc(f):
             #
             # Call the desired function
             #
-            result = f(*args, **kwargs)
+            result = f(*args, **kwargs)  # IGNORE THIS LINE
 
             # Validate return value
             if contract.return_type is not None:
